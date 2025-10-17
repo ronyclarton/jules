@@ -1,0 +1,7 @@
+celery
+redis
+psycopg2-binary
+torch
+shap-e
+boto3 # For S3 interaction
+# Blender is installed via the Dockerfile, not pip
