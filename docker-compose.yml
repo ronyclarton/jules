@@ -11,8 +11,8 @@ services:
     volumes:
       - ./packages/frontend:/app
       - /app/node_modules
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    env_file:
+      - .env
     networks:
       - app-network
 
@@ -42,12 +42,8 @@ services:
     build:
       context: ./packages/user-service
       dockerfile: Dockerfile
-    volumes:
-      - ./packages/user-service:/app
-      - /app/node_modules
-    environment:
-      - DATABASE_URL=postgres://user:password@postgres:5432/db
-      - JWT_SECRET=your-super-secret-key
+    env_file:
+      - .env
     depends_on:
       - postgres
     networks:
@@ -58,12 +54,8 @@ services:
     build:
       context: ./packages/generation-service
       dockerfile: Dockerfile
-    volumes:
-      - ./packages/generation-service:/app
-    environment:
-      - DATABASE_URL=postgres://user:password@postgres:5432/db
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    env_file:
+      - .env
     depends_on:
       - postgres
       - redis
@@ -78,13 +70,48 @@ services:
     volumes:
       - ./packages/ai-worker:/app
       - model-cache:/root/.cache/huggingface
-    environment:
-      - DATABASE_URL=postgres://user:password@postgres:5432/db
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - generated-assets:/app/assets
+    env_file:
+      - .env
     depends_on:
       - postgres
       - redis
+    networks:
+      - app-network
+
+  # Profiling Service
+  profiling-service:
+    build:
+      context: ./packages/profiling-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+  # Asset Server
+  asset-server:
+    build:
+      context: ./packages/asset-server
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    volumes:
+      - generated-assets:/app/assets
+    networks:
+      - app-network
+
+  # Community Service
+  community-service:
+    build:
+      context: ./packages/community-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - postgres
     networks:
       - app-network
 
@@ -118,3 +145,4 @@ networks:
 volumes:
   postgres-data:
   model-cache:
+  generated-assets:

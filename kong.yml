@@ -3,7 +3,7 @@ _comment: "Declarative configuration for Kong API Gateway"
 
 services:
   - name: user-service
-    url: http://user-service:3000 # The internal Docker network address for the user service
+    url: http://user-service:3000
     routes:
       - name: user-service-register
         paths:
@@ -11,9 +11,18 @@ services:
       - name: user-service-login
         paths:
           - /login
+      - name: user-service-events
+        paths:
+          - /events
+      - name: user-service-upgrade
+        paths:
+          - /upgrade-to-pro
+      - name: user-service-profile-update
+        paths:
+          - /profile/update
 
   - name: generation-service
-    url: http://generation-service:8080 # The internal Docker network address for the generation service
+    url: http://generation-service:8080
     routes:
       - name: generation-service-generate
         paths:
@@ -21,6 +30,26 @@ services:
         methods:
           - POST
       - name: generation-service-status
+        paths:
+          - /models/
+        methods:
+          - GET
+      - name: community-like
+        paths:
+          - /models/
+        methods:
+          - POST
+          - DELETE
+
+  - name: community-service
+    url: http://community-service:8083
+    routes:
+      - name: community-gallery
+        paths:
+          - /gallery
+        methods:
+          - GET
+      - name: community-model-detail
         paths:
           - /models/
         methods:
@@ -35,9 +64,5 @@ plugins:
         - GET
         - POST
         - OPTIONS
-      headers:
-        - Accept
-        - Authorization
-        - Content-Type
       credentials: true
       max_age: 3600
