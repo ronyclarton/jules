@@ -40,6 +40,12 @@ services:
         methods:
           - POST
           - DELETE
+      - name: community-follow
+        paths:
+          - /users/
+        methods:
+          - POST
+          - DELETE
 
   - name: community-service
     url: http://community-service:8083

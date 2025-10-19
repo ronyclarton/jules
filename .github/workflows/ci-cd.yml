@@ -1,0 +1,60 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/login-ecr@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build and push services to ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ai-3d-app
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY/user-service:$IMAGE_TAG -f packages/user-service/Dockerfile .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY/generation-service:$IMAGE_TAG -f packages/generation-service/Dockerfile .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY/ai-worker:$IMAGE_TAG -f packages/ai-worker/Dockerfile .
+        # ... build other services ...
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags
+
+    - name: Configure kubectl
+      run: |
+        aws eks update-kubeconfig --name production-cluster --region us-east-1
+
+    - name: Deploy to Kubernetes
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ai-3d-app
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Substitute environment variables in the deployment manifest
+        envsubst < kubernetes/deployment.yml > kubernetes/deployment.processed.yml
+
+        # Apply the processed kubernetes configuration
+        kubectl apply -f kubernetes/deployment.processed.yml
+
+        # Force a rollout restart to pick up the new images
+        kubectl rollout restart deployment/user-service
+        kubectl rollout restart deployment/generation-service
+        # ... restart other deployments ...

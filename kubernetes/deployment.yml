@@ -1,0 +1,102 @@
+# --- User Service ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: ${ECR_REGISTRY}/${ECR_REPOSITORY}/user-service:${IMAGE_TAG}
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - secretRef:
+            name: app-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+spec:
+  selector:
+    app: user-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: ClusterIP
+
+# --- Generation Service ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: generation-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: generation-service
+  template:
+    metadata:
+      labels:
+        app: generation-service
+    spec:
+      containers:
+      - name: generation-service
+        image: ${ECR_REGISTRY}/${ECR_REPOSITORY}/generation-service:${IMAGE_TAG}
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - secretRef:
+            name: app-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: generation-service
+spec:
+  selector:
+    app: generation-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+# --- AI Worker ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-worker
+  template:
+    metadata:
+      labels:
+        app: ai-worker
+    spec:
+      containers:
+      - name: ai-worker
+        image: ${ECR_REGISTRY}/${ECR_REPOSITORY}/ai-worker:${IMAGE_TAG}
+        envFrom:
+        - secretRef:
+            name: app-secrets
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+          requests:
+            nvidia.com/gpu: 1
+
+# ... other services (profiling, community, etc.) would be defined here ...

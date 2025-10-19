@@ -22,6 +22,8 @@ function Model({ url }: { url: string }) {
 
 export default function ModelPage({ params }: { params: { id: string } }) {
   const [model, setModel] = useState<ModelData | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const { isLoggedIn } = useAuthStore();
   const router = useRouter();
@@ -32,6 +34,10 @@ export default function ModelPage({ params }: { params: { id: string } }) {
         setIsLoading(true);
         const modelResponse = await api.get(`/models/${params.id}`);
         setModel(modelResponse.data);
+
+        const commentsResponse = await api.get(`/models/${params.id}/comments`);
+        setComments(commentsResponse.data);
+
       } catch (error) {
         console.error("Failed to fetch model data", error);
       } finally {
@@ -56,6 +62,38 @@ export default function ModelPage({ params }: { params: { id: string } }) {
     }
   };
 
+  const handleFollow = async () => {
+    if (!isLoggedIn() || !model) return router.push('/login');
+    try {
+      await api.post(`/users/${model.user_id}/follow`);
+      // Add visual feedback later
+    } catch (error) {
+      console.error("Failed to follow user", error);
+    }
+  };
+
+  const handleComment = async () => {
+    if (!newComment.trim() || !isLoggedIn()) return;
+    try {
+      const response = await api.post(`/models/${params.id}/comment`, { content: newComment });
+      setComments([response.data, ...comments]);
+      setNewComment('');
+    } catch (error) {
+      console.error("Failed to post comment", error);
+    }
+  };
+
+  const handleRemix = async () => {
+    if (!isLoggedIn()) return router.push('/login');
+    try {
+      const response = await api.post(`/models/${params.id}/remix`);
+      // Redirect to the main editor page with the new remixed model
+      router.push(`/?remix_id=${response.data.id}`);
+    } catch (error) {
+      console.error("Failed to remix model", error);
+    }
+  };
+
   if (isLoading) return <p className="text-center mt-20">Loading model...</p>;
   if (!model) return <p className="text-center mt-20">Model not found.</p>;
 
@@ -74,12 +112,38 @@ export default function ModelPage({ params }: { params: { id: string } }) {
         </div>
         <div className="bg-gray-800 p-6 rounded-lg">
           <h1 className="text-2xl font-bold mb-2">{model.prompt}</h1>
-          <p className="text-sm text-gray-400 mb-4">Created by: {model.user_id}</p>
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm text-gray-400">Created by: {model.user_id}</p>
+            <button onClick={handleFollow} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-lg text-sm">Follow</button>
+          </div>
           <div className="flex gap-4 mb-6">
             <button onClick={handleLike} className="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded-lg flex items-center">
               Like <span className="ml-2 bg-white text-pink-500 text-xs font-bold px-2 py-1 rounded-full">{model.likes_count}</span>
             </button>
+            <button onClick={handleRemix} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Remix</button>
           </div>
+
+          <h2 className="text-xl font-semibold mb-4">Comments</h2>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {comments.map(comment => (
+              <div key={comment.id} className="bg-gray-700 p-3 rounded-lg">
+                <p className="text-sm">{comment.content}</p>
+                <p className="text-xs text-gray-400 mt-1">by {comment.user_id}</p>
+              </div>
+            ))}
+          </div>
+
+          {isLoggedIn() && (
+            <div className="mt-6">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                className="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-2 focus:ring-blue-500"
+              />
+              <button onClick={handleComment} className="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Post Comment</button>
+            </div>
+          )}
         </div>
       </div>
     </div>

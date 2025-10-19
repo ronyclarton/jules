@@ -74,6 +74,102 @@ async def get_gallery(limit: int = 20, offset: int = 0):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class CommentRequest(BaseModel):
+    content: str
+
+class CommentResponse(BaseModel):
+    id: str
+    user_id: str
+    content: str
+
+@app.post("/models/{model_id}/comment", response_model=CommentResponse)
+async def comment_on_model(model_id: str, request: CommentRequest, current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "INSERT INTO comments (user_id, model_id, content) VALUES (%s, %s, %s) RETURNING id, user_id, content",
+            (user_id, model_id, request.content)
+        )
+        new_comment = cursor.fetchone()
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return new_comment
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/models/{model_id}/comments", response_model=List[CommentResponse])
+async def get_comments(model_id: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT id, user_id, content FROM comments WHERE model_id = %s ORDER BY created_at DESC", (model_id,))
+        comments = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return comments
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/users/{user_to_follow_id}/follow", status_code=204)
+async def follow_user(user_to_follow_id: str, current_user: dict = Depends(get_current_user)):
+    follower_id = current_user.get("id")
+    if follower_id == user_to_follow_id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself.")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO user_followers (follower_id, following_id) VALUES (%s, %s) ON CONFLICT (follower_id, following_id) DO NOTHING",
+            (follower_id, user_to_follow_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/users/{user_to_unfollow_id}/follow", status_code=204)
+async def unfollow_user(user_to_unfollow_id: str, current_user: dict = Depends(get_current_user)):
+    follower_id = current_user.get("id")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM user_followers WHERE follower_id = %s AND following_id = %s", (follower_id, user_to_unfollow_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/models/{model_id}/remix")
+async def remix_model(model_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        # First, get the original model's data
+        cursor.execute("SELECT prompt FROM models WHERE id = %s AND is_private = false", (model_id,))
+        original_model = cursor.fetchone()
+        if not original_model:
+            raise HTTPException(status_code=404, detail="Original model not found or is private.")
+
+        # Create a new model record that remixes the original
+        cursor.execute(
+            "INSERT INTO models (user_id, prompt, remixed_from_model_id) VALUES (%s, %s, %s) RETURNING id, prompt",
+            (user_id, f"Remix of: {original_model['prompt']}", model_id)
+        )
+        new_model = cursor.fetchone()
+        conn.commit()
+        cursor.close()
+        conn.close()
+        # The frontend will then likely navigate to the editor with this new model
+        return new_model
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/models/{model_id}")
 async def get_model(model_id: str):
     try:
